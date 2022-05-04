@@ -1,0 +1,415 @@
+---
+title: "GNBF6010 seruat"
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+setwd("C:/Users/may/Desktop/keti")
+# save wanted RData in a file
+# save(data, pbmc, all.genes, file = "my.RData")
+# or save all data
+# save.image(file="allData")
+library(Seurat)
+library(dplyr)
+library(patchwork)
+library("data.table")
+library(scuttle)
+library(ggplot2)
+memory.limit(size=100000000)
+# Load the RData
+#load("C:/Users/may/Desktop/keti/D.RData")
+```
+
+```{r}
+# Load the PBMC dataset
+data <- readSparseCounts('data.raw.matrix.txt')
+data[100:200,]
+
+# Initialize the Seurat object with the raw (non-normalized data).
+pbmc <-CreateSeuratObject(counts = data, project = "pbmc3k", min.cells = 3, min.features = 200)
+pbmc
+head(pbmc@meta.data)
+```
+
+Pre-processing
+QC metrics
+The [[ operator can add columns to object metadata. This is a great place to stash QC stats
+```{r}
+pbmc[["percent.mt"]] <- PercentageFeatureSet(pbmc, pattern = "^MT-")
+head(pbmc@meta.data,10)
+pbmc[["RNA"]]@counts[c("CD3D", "TCL1A", "MS4A1"), 1:30]
+```
+
+Visualize QC metrics as a violin plot
+```{r}
+VlnPlot(pbmc, features = "nFeature_RNA") & geom_hline(yintercept = 200)
+```
+
+FeatureScatter is typically used to visualize feature-feature relationships, but can be used
+for anything calculated by the object, i.e. columns in object metadata, PC scores etc.
+```{r}
+plot1 <- FeatureScatter(pbmc, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(pbmc, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 + plot2
+pbmc <- subset(pbmc, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+```
+
+Normalizing the data
+```{r}
+pbmc <- NormalizeData(pbmc, normalization.method = "LogNormalize", scale.factor = 10000)
+# or: pbmc <- NormalizeData(pbmc)
+#normalized.data <- pbmc[["RNA"]]@data
+#normalized.data[1:10,1:2]
+```
+
+Feature selection
+```{r}
+pbmc <- FindVariableFeatures(pbmc, selection.method = "vst", nfeatures = 2000)
+
+# Identify the 10 most highly variable genes
+top10 <- head(VariableFeatures(pbmc), 10)
+
+# plot variable features with and without lab
+plot1 <- VariableFeaturePlot(pbmc)
+plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+plot1 + plot2
+```
+
+Data scaling
+```{r}
+all.genes <- rownames(pbmc)
+pbmc <- ScaleData(pbmc, features = all.genes)
+#scale.data <- pbmc[["RNA"]]@scale.data
+#scale.data[1:10,1:4]
+#rm(scale.data)
+```
+
+Perform linear dimensional reduction
+```{r}
+pbmc <- RunPCA(pbmc, features = VariableFeatures(object = pbmc))
+```
+
+Determine the ‘dimensionality’ of the dataset
+```{r}
+# NOTE: This process can take a long time for big datasets, comment out for expediency. More
+# approximate techniques such as those implemented in ElbowPlot() can be used to reduce
+# computation time
+pbmc <- JackStraw(pbmc, num.replicate = 100)
+pbmc <- ScoreJackStraw(pbmc, dims = 1:20)
+JackStrawPlot(pbmc, dims = 1:20)
+ElbowPlot(pbmc)
+```
+
+Cluster the cells
+```{r}
+pbmc <- FindNeighbors(pbmc, dims = 1:6)
+pbmc <- FindClusters(pbmc, resolution = 0.4)
+head(Idents(pbmc), 5)
+```
+
+Run non-linear dimensional reduction (UMAP/tSNE)
+```{r}
+pbmc <- RunTSNE(pbmc, dims = 1:6)
+DimPlot(pbmc, reduction = "tsne")
+```
+Finding differentially expressed features (cluster biomarkers)
+# find all markers of cluster 2
+```{r}
+cluster3.markers <- FindMarkers(pbmc, ident.1 = 3, min.pct = 0.25)
+head(cluster3.markers, n = 5)
+```
+# find all markers distinguishing cluster 5 from clusters 0 and 3
+```{r}
+cluster5.markers <- FindMarkers(pbmc, ident.1 = 5, ident.2 = c(0, 3), min.pct = 0.25)
+head(cluster5.markers, n = 5)
+```
+# find markers for every cluster compared to all remaining cells, report only the positive ones
+```{r}
+pbmc.markers <- FindAllMarkers(pbmc, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+pbmc.markers %>%
+    group_by(cluster) %>%
+    slice_max(n = 2, order_by = avg_log2FC)
+```
+
+# plot the expression level of some special genes
+```{r}
+VlnPlot(pbmc, features = c("MS4A1", "CD79A"))
+```
+
+Different Marker genes
+```{r}
+# T cell
+FeaturePlot(pbmc, features = c( "CD3D","CD3E","CD2")) 
+# Monocytic
+FeaturePlot(pbmc, features = c( "CD14","CD68","LYZ","FCGR3A"))
+# Luminal
+FeaturePlot(pbmc, features = c( "AR","KRT18","KRT8"))
+# Basal/intermediate
+FeaturePlot(pbmc, features = c( "KRT14","KRT5"))
+# Fibroblast
+FeaturePlot(pbmc, features = c( "COL3A1","COL1A1")) 
+# B cell
+FeaturePlot(pbmc, features = c( "MS4A1","CD79A"))
+# Endothelial
+FeaturePlot(pbmc, features = c( "ENG","VWF"))
+# Mast
+FeaturePlot(pbmc, features = c( "MS4A2","TPSAB1","TPSB2"))
+FeaturePlot(pbmc, features = c("CD3D", "CD79A", "C1QA", "CD163", "EPCAM", "PECAM1", "VIM", "DCN","S100A9"), pt.size=0.01)
+```
+
+Annotate cell types by SingleR tool
+```{r}
+if (!require("BiocManager", quiet = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("BiocParallel")
+
+library(celldex)
+ref <- HumanPrimaryCellAtlasData()
+library(SingleR)
+library(BiocParallel)
+
+pred.scRNA <- SingleR(test = pbmc@assays$RNA@data, ref = ref, labels = ref$label.main,clusters = pbmc@active.ident)
+
+#See the labels
+pred.scRNA$pruned.labels
+```
+
+Assigning cell type identity to clusters
+```{r}
+levels(pbmc)
+new.cluster.ids <- c("Luminal", "Luminal","Luminal","T cell","Luminal","Endothelial","Luminal","Monocytic","Fibroblast","Luminal","Mast","Basal/Intermediate","Luminal","B cell","Chondrocyte","Endothelial")
+
+pbmc@active.ident
+
+names(new.cluster.ids) <- levels(pbmc)
+pbmc <- RenameIdents(pbmc, new.cluster.ids)
+levels(pbmc)
+
+# tSNE plot of annotated cell clusters
+pbmc <- RunTSNE(pbmc, dims = 1:6)
+DimPlot(pbmc, reduction = "tsne", label = TRUE)+ NoLegend() + scale_color_manual(values = c("#00DDA2","deeppink","goldenrod","purple","#33FF33","#00A9FF","red","yellow","gray"))
+
+```
+
+Dot plot of gene marker expression of different cell types
+```{r}
+features<-c('ACTA2','PECAM1','VWF','ENG','CMA1','MS4A2','TPSAB1','TPSB2','AR','KRT19','KRT18','KRT8','TP63','KRT14','KRT5','LYZ','FCGR3A','CSF1R','CD68','CD163','CD14','UCHL1','HAVCR2','PDCD1','CTLA4','CD8A','SELL','PTPRC','CD4','BTLA','IL2RA','IL7R','CCR7','CD28','CD27','SLAMF1','DPP4','CD7','CD2','CD3G','CD3E','CD3D')
+features<-rev(features)
+d<-DotPlot(
+  object=pbmc,
+  assay = NULL,
+  features,
+  cols = c("lightgrey", "blue"),
+  col.min = -2.5,
+  col.max = 2.5,
+  dot.min = 0,
+  dot.scale = 6,
+  idents = NULL,
+  group.by = NULL,
+  split.by = NULL,
+  cluster.idents = TRUE,
+  scale = TRUE,
+  scale.by = "radius",
+  scale.min = NA,
+  scale.max = NA
+)
+j<-d+coord_flip()+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5,size=8),axis.text.y = element_text(size=5))
+j
+
+
+```
+
+
+
+```{r}
+## Alternative way to assign different color to clusters
+library(tidyverse)
+tsne = pbmc@reductions$tsne@cell.embeddings %>%
+      as.data.frame() %>% cbind(tx = pbmc@meta.data$seurat_clusters)
+
+## 用 ggplot 绘图（假设所有的细胞被分为 6 个 cluster）
+jpeg(file = "tSNE.by_cluster.jpg", width = 7, height = 7, units = "in", res = 600)
+myplot <- ggplot(tsne, aes(x = tSNE_1, y = tSNE_2, color = tx)) + 
+      geom_point(size = 0.2, alpha = 1) + 
+      scale_color_manual(values=c("1" = "cyan3","10"="cyan3","5"= "cyan3","0" = "cyan3","9" = "cyan3","3" = "cyan3","11" = "purple",  "4" = "cyan3", "5" = "cyan3", "6" = "cyan3","7" = "cyan3","14" = "goldenrod","8"="goldenrod","13"="deepskyblue","12"="yellow green","2"="deeppink1","16"="yellow", "15" = "red"))
+myplot + theme_bw()
+```
+
+
+
+Reanalysis of cell subtypes
+
+T cell
+```{r}
+sce = pbmc[, Idents(pbmc) %in% c( "T cell")]
+sce <- NormalizeData(sce, normalization.method = "LogNormalize", scale.factor = 1e4) 
+sce <- FindVariableFeatures(sce, selection.method = 'vst', nfeatures = 2000)
+all.genes <- rownames(sce)
+sce <- ScaleData(sce,features = all.genes)
+
+sce <- RunPCA(sce, features = VariableFeatures(object = sce))
+
+sce <- FindNeighbors(sce, dims = 1:8)
+sce <- FindClusters(sce, resolution = 0.4)
+
+sce <- RunTSNE(sce, dims = 1:8)
+DimPlot(sce, reduction = 'tsne',label=T)
+```
+
+Find T cell subtypes
+```{r}
+par(mfrow=c(2,3))
+FeaturePlot(sce, features = c( "CD4","CD8A","CCR7","GZMA","FOXP3","LAG3"))
+
+FeaturePlot(sce, features = c( "FOXP3","IL2RA","CTLA4","IKZF2","IKZF4","TNFRSF18"))
+
+#CD8+
+FeaturePlot(sce, features = c( "GZMH", "GZMB", "GZMA", "PRF1"))
+
+#CD8+ naive
+VlnPlot(sce, features = c( "CD45RA","CD62L","CD127","CDR7","CCR7","ACACB"))
+
+#CD8+ effector
+VlnPlot(sce, features = c( "CCL5"))
+
+#CD8+
+VlnPlot(sce, features = c( "KLK3"))
+
+#CD4+
+VlnPlot(sce, features = c( "CD4"))
+
+#Treg
+VlnPlot(sce, features = c( "FOXP3","CD25"),pt.size=0)
+
+# Use SingleR to help annotate cells
+if (!require("BiocManager", quiet = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("BiocParallel")
+library(celldex)
+ref <- BlueprintEncodeData()
+library(SingleR)
+library(BiocParallel)
+pre.scRNA <- SingleR(test = sce@assays$RNA@data, ref = ref, labels = ref$label.main,clusters = sce@active.ident)
+pre.scRNA$pruned.labels
+
+VlnPlot(sce, features = c("CD8A", "CD4"),pt.size=0)
+VlnPlot(sce, features = c("AR"))
+VlnPlot(sce, features = c("GZMH", "GZMB", "GZMA", "PRF1","IFN"))
+VlnPlot(sce, features = c("KLK3"))
+VlnPlot(sce, features = c("FOLH1"))
+VlnPlot(sce, features = c("FOXP3","IL2RA","STAT5A","CTLA4"))
+VlnPlot(sce1, features = c("CCL2"),pt.size=0)
+VlnPlot(pbmc,features=c("COL3A1",'MS4A1'),pt.size=0)
+```
+
+Epithelial cell
+```{r}
+sce1 = pbmc[, Idents(pbmc) %in% c( "Basal/Intermediate","Luminal")]
+sce1 <- NormalizeData(sce1, normalization.method = "LogNormalize", scale.factor = 1e4) 
+sce1 <- FindVariableFeatures(sce1, selection.method = 'vst', nfeatures = 2000)
+all.genes <- rownames(sce1)
+sce1 <- ScaleData(sce1,features = all.genes)
+sce1 <- RunPCA(sce1, features = VariableFeatures(object = sce1))
+
+sce1 <- FindNeighbors(sce1, dims = 1:9)
+sce1 <- FindClusters(sce1, resolution = 0.4)
+
+sce1 <- RunTSNE(sce1, dims = 1:9)
+DimPlot(sce1, reduction = 'tsne',label=TRUE)
+
+#Basal/intermediate
+FeaturePlot(sce1, features = c( "KRT5","KRT14","KRT19","TP63"))
+#CELL CYCLE
+FeaturePlot(sce1, features = c( "CCNB1","CENPF","PTTG1","CDC20"))
+```
+
+
+Fibroblast cell
+```{r}
+sce3 = pbmc[, Idents(pbmc) %in% c( "Fibroblast")]
+sce3 <- NormalizeData(sce3, normalization.method = "LogNormalize", scale.factor = 1e4) 
+sce3 <- FindVariableFeatures(sce3, selection.method = 'vst', nfeatures = 2000)
+all.genes <- rownames(sce3)
+sce3 <- ScaleData(sce3,features = all.genes)
+
+sce3 <- RunPCA(sce3, features = VariableFeatures(object = sce3))
+
+sce3 <- FindNeighbors(sce3, dims = 1:9)
+sce3 <- FindClusters(sce3, resolution = 0.15)
+# Look at cluster IDs of the first 5 cells
+
+sce3 <- RunTSNE(sce3, dims = 1:9)
+DimPlot(sce3, reduction = 'tsne')
+
+FeaturePlot(sce3, features = c( "FAP","S100A4","SPARC","ACTA2","PDGFRA","PDGFRB","CAV1","VIM"))
+```
+
+
+Endothelial cell
+```{r}
+sce4 = pbmc[, Idents(pbmc) %in% c( "Endothelial")]
+sce4 <- NormalizeData(sce4, normalization.method = "LogNormalize", scale.factor = 1e4) 
+sce4 <- FindVariableFeatures(sce4, selection.method = 'vst', nfeatures = 2000)
+all.genes <- rownames(sce4)
+sce4 <- ScaleData(sce4,features = all.genes)
+
+sce4 <- RunPCA(sce4, features = VariableFeatures(object = sce4))
+
+sce4 <- FindNeighbors(sce4, dims = 1:9)
+sce4 <- FindClusters(sce4, resolution = 0.1)
+
+sce4 <- RunTSNE(sce4, dims = 1:9)
+DimPlot(sce4, reduction = 'tsne')
+
+#gene markers
+FeaturePlot(sce4, features = c( "PECAM1","FLT1","PDPN","S100A4","THY1","ACTA2"))
+
+#aEC
+VlnPlot(sce4, features = c("S100A4","THY1","ACTA2"))
+
+```
+
+Annotate Endothelial cells
+```{r}
+new.cluster.ids <- c("Endothelial","aEC","aEC","aEC","Endothelial","Endothelial")
+names(new.cluster.ids) <- levels(sce4)
+sce4 <- RenameIdents(sce4, new.cluster.ids)
+sce4 <- RunTSNE(sce4, dims = 1:9)
+DimPlot(sce4, reduction = "tsne", label = TRUE)
+sce4@active.ident
+sce4[["Annotation"]] <- sce4@active.ident
+sce4@meta.data
+```
+
+
+Cell communication by cellphoneDB
+prepare files needed
+```{r}
+# create count.txt file
+write.table(as.matrix(pbmc@assays$RNA@data), 'data.txt', sep='\t', quote=F)
+
+meta_data <- cbind(rownames(pbmc@meta.data), pbmc@meta.data[,'Annotation', drop=F])  
+meta_data <- as.matrix(meta_data)
+#create meta txt file
+write.table(meta_data, 'meta.txt', sep='\t', quote=F, row.names=F)
+
+library(psych)
+library(qgraph)
+library(igraph)
+library(tidyverse)
+```
+
+
+
+
+
+
