@@ -115,10 +115,12 @@ pbmc <- FindClusters(pbmc, resolution = 0.4)
 head(Idents(pbmc), 5)
 ```
 
-Run non-linear dimensional reduction (UMAP/tSNE)
+Run non-linear dimensional reduction (tSNE)
 ```{r}
 pbmc <- RunTSNE(pbmc, dims = 1:6)
+png(file = "fig1.png")
 DimPlot(pbmc, reduction = "tsne")
+dev.off()
 ```
 Finding differentially expressed features (cluster biomarkers)
 # find all markers of cluster 2
@@ -196,8 +198,9 @@ levels(pbmc)
 
 # tSNE plot of annotated cell clusters
 pbmc <- RunTSNE(pbmc, dims = 1:6)
+png(file = "fig2.png")
 DimPlot(pbmc, reduction = "tsne", label = TRUE)+ NoLegend() + scale_color_manual(values = c("#00DDA2","deeppink","goldenrod","purple","#33FF33","#00A9FF","red","yellow","gray"))
-
+dev.off()
 ```
 
 Dot plot of gene marker expression of different cell types
