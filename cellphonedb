@@ -7,5 +7,7 @@ cellphonedb plot heatmap_plot meta.txt
 
 # for fibroblast and endothelial cell subtypes
 cellphonedb method statistical_analysis  smeta.txt  sdata.txt --counts-data=gene_name
+# Download R package 'ggplot2'
 cellphonedb plot dot_plot 
+# Download R package 'heatmap'
 cellphonedb plot heatmap_plot smeta.txt   
