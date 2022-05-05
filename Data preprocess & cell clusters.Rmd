@@ -1,5 +1,5 @@
 ---
-title: "GNBF6010 seruat"
+title: "GNBF6010 project"
 output:
   html_document:
     df_print: paged
@@ -119,7 +119,7 @@ Run non-linear dimensional reduction (tSNE)
 ```{r}
 pbmc <- RunTSNE(pbmc, dims = 1:6)
 png(file = "fig1.png")
-DimPlot(pbmc, reduction = "tsne")
+DimPlot(pbmc, reduction = "tsne",label = TRUE)
 dev.off()
 ```
 Finding differentially expressed features (cluster biomarkers)
@@ -239,7 +239,6 @@ library(tidyverse)
 tsne = pbmc@reductions$tsne@cell.embeddings %>%
       as.data.frame() %>% cbind(tx = pbmc@meta.data$seurat_clusters)
 
-## 用 ggplot 绘图（假设所有的细胞被分为 6 个 cluster）
 jpeg(file = "tSNE.by_cluster.jpg", width = 7, height = 7, units = "in", res = 600)
 myplot <- ggplot(tsne, aes(x = tSNE_1, y = tSNE_2, color = tx)) + 
       geom_point(size = 0.2, alpha = 1) + 
@@ -404,11 +403,6 @@ meta_data <- cbind(rownames(pbmc@meta.data), pbmc@meta.data[,'Annotation', drop=
 meta_data <- as.matrix(meta_data)
 #create meta txt file
 write.table(meta_data, 'meta.txt', sep='\t', quote=F, row.names=F)
-
-library(psych)
-library(qgraph)
-library(igraph)
-library(tidyverse)
 ```
 
 
