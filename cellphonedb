@@ -1,10 +1,11 @@
 # Code for cellphonedb command on linux terminal
 # for cell communication among cells 
-cellphonedb method statistical_analysis  meta.txt  data.txt
+# Remember to add 'Gene' in the first column in the data.txt / sdata.txt file
+cellphonedb method statistical_analysis  meta.txt  data.txt --counts-data=gene_name
 cellphonedb plot dot_plot 
 cellphonedb plot heatmap_plot meta.txt   
 
 # for fibroblast and endothelial cell subtypes
-cellphonedb method statistical_analysis  smeta.txt  sdata.txt
+cellphonedb method statistical_analysis  smeta.txt  sdata.txt --counts-data=gene_name
 cellphonedb plot dot_plot 
 cellphonedb plot heatmap_plot smeta.txt   
