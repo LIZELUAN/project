@@ -1,0 +1,10 @@
+# Code for cellphonedb command on linux terminal
+# for cell communication among cells 
+cellphonedb method statistical_analysis  meta.txt  data.txt
+cellphonedb plot dot_plot 
+cellphonedb plot heatmap_plot meta.txt   
+
+# for fibroblast and endothelial cell subtypes
+cellphonedb method statistical_analysis  smeta.txt  sdata.txt
+cellphonedb plot dot_plot 
+cellphonedb plot heatmap_plot smeta.txt   
