@@ -1,6 +1,6 @@
 # project
-This code is about scRNA analysis of prostate cancer for my research project.
-The data used is the gene expression matrix of scRNA data of prostate cancer tumours.
+This code is about scRNA-seq analysis of prostate cancer for my research project.
+The data used is the gene expression matrix of scRNA-seq data of prostate cancer tumours.
 The analysis includes tSNE view and cell communication analysis.
 
 Cell communication analysis starts from the preparation of meta.txt and count.txt.
