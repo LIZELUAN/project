@@ -1,0 +1,100 @@
+# Most of this code references some websites
+---
+title: "GNBF6010 project"
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+setwd("C:/Users/may/Desktop/keti")
+# save wanted RData in a file
+# save(data, pbmc, all.genes, file = "my.RData")
+# or save all data
+# save.image(file="allData")
+library(org.Hs.eg.db)
+install.packages("clusterProfiler")
+if (!require("BiocManager", quiet = TRUE))
+    install.packages("BiocManager")
+BiocManager::install('circlize')
+library(openxlsx) #read.xlsx文件
+library(ggplot2)#柱状图和点状图
+library(stringr)#基因ID转换
+library(enrichplot)#GO,KEGG,GSEA
+library(clusterProfiler)#GO,KEGG,GSEA
+library(GOplot)#弦图，弦表图，系统聚类图
+library(DOSE)
+library(ggnewscale)
+library(topGO)#绘制通路网络图
+library(circlize)#绘制富集分析圈图
+library(ComplexHeatmap)#绘制图例
+rm(pbmc.markers)
+library(Seurat)
+library(tidyverse)
+library(patchwork)
+library(monocle)
+library(clusterProfiler)
+rm(df2)
+memory.limit(size=100000000)
+# Load the RData
+load("C:/Users/may/Desktop/keti/D2.RData")
+```
+
+
+```{r}
+b.cluster <- FindMarkers(sce1,ident.1 = 10, min.pct = 0.25)
+sig_b.cluster <- subset(b.cluster, p_val_adj<0.01&abs(avg_log2FC)>1)
+
+```
+
+GO enrichment analysis
+```{r}
+ego_MF <- enrichGO(gene          = row.names(sig_b.cluster),
+                   OrgDb         = 'org.Hs.eg.db',
+                   keyType       = 'SYMBOL',
+                   ont           = "MF",
+                   pAdjustMethod = "BH",
+                   pvalueCutoff  = 0.01,
+                   qvalueCutoff  = 0.05)
+
+ego_MF@result$Description <- substring(ego_MF@result$Description,1,70)
+
+p_MF <- barplot(ego_MF,showCategory = 10) + ggtitle("barplot for Molecular function")
+
+p <- dotplot(ego_MF, showCategory=10)
+p0=p_MF/p
+png(filename='enrichGO.png')
+p0
+
+dev.off()
+```
+
+KEGG enrichment analysis
+```{r}
+genelist <- bitr(row.names(sig_b.cluster), fromType="SYMBOL",
+                           toType="ENTREZID", OrgDb='org.Hs.eg.db')
+genelist <- pull(genelist,ENTREZID)               
+ekegg <- enrichKEGG(gene = genelist, organism = 'hsa')
+p1 <- barplot(ekegg, showCategory=20)
+p2 <- dotplot(ekegg, showCategory=20)
+plotc = p1/p2
+png(filename='enrichKEGG.png', width = 1200, height = 1000)
+plotc
+dev.off()
+#pdf(filename="enrich/enrichKEGG.png", width = 12, height = 10)
+```
+
+KEGG network
+```{r}
+KEGG2 <- pairwise_termsim(ekegg)
+png(filename='pathway network.png',width=1800,height=1800)
+enrichplot::emapplot(KEGG2,showCategory =50, color = "p.adjust", layout = "kk")
+dev.off()
+```
+
